@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Phone,
@@ -60,9 +60,55 @@ export function CallWidget() {
         toggleAutoDialerPause,
         terminateAutoDialer,
         skipCurrent,
+        nextAutoDialNumber,
+        updateQueueStatus,
+        stopAutoDialer,
+        autoDialerQueue,
     } = useDialerStore();
 
     const { data: contact } = useContactByPhone(currentNumber || null);
+
+    // Auto-dialer loop: trigger next call when queue is active and not in call
+    const autoDialTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        // Clear any pending timeout when dependencies change
+        if (autoDialTimeoutRef.current) {
+            clearTimeout(autoDialTimeoutRef.current);
+            autoDialTimeoutRef.current = null;
+        }
+
+        // Only proceed if auto-dialer is active, not paused, and not in a call
+        if (!autoDialerActive || isAutoDialerPaused || isInCall) {
+            return;
+        }
+
+        // Check for pending items in queue
+        const pendingItems = autoDialerQueue.filter(q => !q.lastStatus);
+        if (pendingItems.length === 0) {
+            // Queue exhausted, stop auto-dialer
+            stopAutoDialer();
+            return;
+        }
+
+        // Add a small delay before dialing next number (gives user a moment)
+        autoDialTimeoutRef.current = setTimeout(() => {
+            const nextItem = nextAutoDialNumber();
+            if (nextItem) {
+                // Trigger the call
+                setCurrentNumber(nextItem.number);
+                startCall();
+                SipService.getInstance().call(nextItem.number);
+            }
+        }, 1500); // 1.5 second delay between calls
+
+        return () => {
+            if (autoDialTimeoutRef.current) {
+                clearTimeout(autoDialTimeoutRef.current);
+            }
+        };
+    }, [autoDialerActive, isAutoDialerPaused, isInCall, autoDialerQueue, nextAutoDialNumber, setCurrentNumber, startCall, stopAutoDialer]);
+
 
     const [isMuted, setIsMuted] = useState(false);
     const [isSpeakerOn, setIsSpeakerOn] = useState(true);
@@ -104,7 +150,13 @@ export function CallWidget() {
         }
     }, [currentNumber, startCall, setCurrentNumber]);
 
-    const handleHangup = () => SipService.getInstance().hangup();
+    const handleHangup = () => {
+        // If in auto-dial mode, mark current as answered before hangup
+        if (autoDialerActive && currentNumber) {
+            updateQueueStatus(currentNumber, "answered");
+        }
+        SipService.getInstance().hangup();
+    };
 
     const handleQuickDial = (phone: string) => {
         setCurrentNumber(phone);
@@ -116,7 +168,7 @@ export function CallWidget() {
         return (
             <motion.button
                 layoutId="dialer-bubble"
-                className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary shadow-xl flex items-center justify-center text-white"
+                className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-green-600 shadow-xl flex items-center justify-center text-white hover:bg-green-700 transition-colors"
                 onClick={openDialer}
                 title="Open Dialer"
             >
@@ -244,7 +296,7 @@ export function CallWidget() {
                                         />
                                         <div className="mt-6 flex justify-center">
                                             <Button
-                                                className="w-full h-14 rounded-2xl bg-primary text-white text-lg font-semibold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                                className="w-full h-14 rounded-2xl bg-green-600 text-white text-lg font-semibold shadow-lg shadow-green-600/20 hover:bg-green-700 hover:scale-[1.02] active:scale-[0.98] transition-all"
                                                 onClick={() => handleCall()}
                                                 disabled={!currentNumber || sipStatus !== "connected"}
                                             >
