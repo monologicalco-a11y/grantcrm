@@ -17,7 +17,13 @@ const nextConfig = {
     typescript: {
         // Also ignore TS errors if any minor ones remain in static generation
         ignoreBuildErrors: true,
-    }
+    },
+    // Fix framer-motion bundling issues during static generation
+    transpilePackages: ['framer-motion'],
+    experimental: {
+        // Use native ESM for external packages
+        esmExternals: 'loose',
+    },
 };
 
 export default withSerwist(nextConfig);
