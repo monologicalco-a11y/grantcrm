@@ -208,8 +208,9 @@ export function useSequenceEnrollments(sequenceId: string) {
 export function useEnrollInSequence() {
     return useSWRMutation(
         "sequence-enrollments",
-        async (_, { arg }: { arg: { sequence_id: string; contact_ids: string[] } }) => {
+        async (_, { arg }: { arg: { sequence_id: string; contact_ids: string[]; organization_id: string } }) => {
             const enrollments = arg.contact_ids.map(contact_id => ({
+                organization_id: arg.organization_id,
                 sequence_id: arg.sequence_id,
                 contact_id,
                 status: "active",

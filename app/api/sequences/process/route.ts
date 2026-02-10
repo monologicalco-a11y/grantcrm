@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { decrypt } from '@/lib/crypto';
+import { injectTracking } from '@/lib/email-tracking';
 import type { EmailSequenceStep, EmailSequence, Contact, SMTPConfig } from '@/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -162,7 +163,6 @@ async function processEnrollment(
         }
 
         // 5. Inject Tracking
-        const { injectTracking } = require('@/lib/email-tracking');
         const trackedBody = injectTracking(body, emailRecord.id, baseUrl);
 
         // Update record with tracked body
@@ -223,10 +223,10 @@ async function processEnrollment(
             .eq('id', enrollment.id);
 
         return { id: enrollment.id, status: 'success', message: 'Email sent successfully' };
-
     } catch (err: unknown) {
         console.error(`Error processing enrollment ${enrollment.id}:`, err);
         const errorMessage = err instanceof Error ? err.message : String(err);
+        console.log(`[DEBUG] Enrollment ${enrollment.id} failed:`, errorMessage);
         return { id: enrollment.id, status: 'error', message: errorMessage };
     }
 }

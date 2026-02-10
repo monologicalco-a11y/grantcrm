@@ -108,7 +108,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Email send failed:', error);
+    console.error('Email send failed details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response,
+      command: error.command
+    });
+    console.log(`[DEBUG] Email send failed:`, error.message);
 
     let errorMessage = 'Failed to send email';
     if (error.code === 'EAUTH') {

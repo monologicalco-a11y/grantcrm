@@ -665,6 +665,7 @@ export default function EmailPage() {
                 onOpenChange={setEnrollmentManagerOpen}
                 sequenceId={selectedSequence?.id || ""}
                 sequenceName={selectedSequence?.name || ""}
+                organizationId={selectedSequence?.organization_id || ""}
             />
         </motion.div>
     );

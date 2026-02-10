@@ -49,6 +49,7 @@ interface SequenceEnrollmentsManagerProps {
     onOpenChange: (open: boolean) => void;
     sequenceId: string;
     sequenceName: string;
+    organizationId: string;
 }
 
 export function SequenceEnrollmentsManager({
@@ -56,6 +57,7 @@ export function SequenceEnrollmentsManager({
     onOpenChange,
     sequenceId,
     sequenceName,
+    organizationId,
 }: SequenceEnrollmentsManagerProps) {
     const { data: enrollments, isLoading } = useSequenceEnrollments(sequenceId);
     const { data: allContacts } = useContacts();
@@ -137,7 +139,8 @@ export function SequenceEnrollmentsManager({
         try {
             await enrollInSequence({
                 sequence_id: sequenceId,
-                contact_ids: selectedToAdd
+                contact_ids: selectedToAdd,
+                organization_id: organizationId
             });
             toast.success(`Enrolled ${selectedToAdd.length} contacts`);
             setSelectedToAdd([]);

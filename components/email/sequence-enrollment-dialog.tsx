@@ -50,7 +50,8 @@ export function SequenceEnrollmentDialog({
 
             await enrollInSequence({
                 sequence_id: selectedSequenceId,
-                contact_ids: contactIds
+                contact_ids: contactIds,
+                organization_id: sequence.organization_id
             });
 
             toast.success(`Enrolled ${contactIds.length} contacts into "${sequence.name}"`);
