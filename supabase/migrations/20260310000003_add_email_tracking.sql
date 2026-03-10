@@ -37,6 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_deal_notes_deal_id ON public.deal_notes(deal_id);
 -- email_tracking_events RLS: Selects are allowed if you can select the parent email. Inserts are typically allowed from public endpoints (API route uses Service Role, so RLS doesn't strictly block it, but good to have)
 ALTER TABLE public.email_tracking_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "email_tracking_events_select" ON public.email_tracking_events;
 CREATE POLICY "email_tracking_events_select" ON public.email_tracking_events FOR SELECT
   USING (
     email_id IN (
@@ -53,6 +54,7 @@ CREATE POLICY "email_tracking_events_select" ON public.email_tracking_events FOR
 -- deal_notes RLS: Selects/Inserts/Updates/Deletes allowed if you can access the deal
 ALTER TABLE public.deal_notes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "deal_notes_select" ON public.deal_notes;
 CREATE POLICY "deal_notes_select" ON public.deal_notes FOR SELECT
   USING (
     deal_id IN (
@@ -60,6 +62,7 @@ CREATE POLICY "deal_notes_select" ON public.deal_notes FOR SELECT
     )
   );
 
+DROP POLICY IF EXISTS "deal_notes_insert" ON public.deal_notes;
 CREATE POLICY "deal_notes_insert" ON public.deal_notes FOR INSERT
   WITH CHECK (
     deal_id IN (
@@ -69,6 +72,7 @@ CREATE POLICY "deal_notes_insert" ON public.deal_notes FOR INSERT
     )
   );
 
+DROP POLICY IF EXISTS "deal_notes_update" ON public.deal_notes;
 CREATE POLICY "deal_notes_update" ON public.deal_notes FOR UPDATE
   USING (
     deal_id IN (
@@ -79,6 +83,7 @@ CREATE POLICY "deal_notes_update" ON public.deal_notes FOR UPDATE
     )
   );
 
+DROP POLICY IF EXISTS "deal_notes_delete" ON public.deal_notes;
 CREATE POLICY "deal_notes_delete" ON public.deal_notes FOR DELETE
   USING (
     deal_id IN (
@@ -90,6 +95,7 @@ CREATE POLICY "deal_notes_delete" ON public.deal_notes FOR DELETE
   );
 
 -- Trigger for deal_notes updated_at
+DROP TRIGGER IF EXISTS set_deal_notes_updated_at ON public.deal_notes;
 CREATE TRIGGER set_deal_notes_updated_at
 BEFORE UPDATE ON public.deal_notes
 FOR EACH ROW EXECUTE FUNCTION public.update_modified_column();
