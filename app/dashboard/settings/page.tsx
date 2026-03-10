@@ -330,6 +330,30 @@ function SettingsContent() {
                                         Save Organization
                                     </Button>
                                 </form>
+
+                                <Separator />
+
+                                <div className="space-y-4">
+                                    <h4 className="font-medium flex items-center gap-2">
+                                        <Database className="h-4 w-4" />
+                                        Data Architecture
+                                    </h4>
+                                    <div className="rounded-lg border p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="space-y-1">
+                                                <h4 className="text-sm font-medium">Sales Pipelines</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Manage your sales stages and create multiple custom pipelines.
+                                                </p>
+                                            </div>
+                                            <Button asChild variant="outline">
+                                                <Link href="/dashboard/settings/pipelines">
+                                                    Manage Pipelines
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -392,7 +416,7 @@ function SettingsContent() {
                                             </p>
                                         </div>
                                         <Button asChild variant="outline">
-                                            <Link href="/dashboard/settings/integrations">
+                                            <Link href="/dashboard/settings/forms">
                                                 Manage Forms
                                             </Link>
                                         </Button>
@@ -441,8 +465,8 @@ function SettingsContent() {
                                                         try {
                                                             await syncCalendar({ provider: 'google' });
                                                             toast.success("Calendar synced successfully!");
-                                                        } catch (err: any) {
-                                                            toast.error(err.message);
+                                                        } catch (err) {
+                                                            toast.error(err instanceof Error ? err.message : "Sync failed");
                                                         }
                                                     }}
                                                 >
@@ -484,8 +508,8 @@ function SettingsContent() {
                                                         try {
                                                             await syncCalendar({ provider: 'outlook' });
                                                             toast.success("Calendar synced successfully!");
-                                                        } catch (err: any) {
-                                                            toast.error(err.message);
+                                                        } catch (err) {
+                                                            toast.error(err instanceof Error ? err.message : "Sync failed");
                                                         }
                                                     }}
                                                 >

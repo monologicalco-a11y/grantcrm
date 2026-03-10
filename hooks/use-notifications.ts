@@ -10,8 +10,8 @@ export interface Notification {
     title: string;
     message: string;
     type: "lead" | "system" | "task" | "mention" | "warning";
-    link: string | null;
-    is_read: boolean;
+    link_url: string | null;
+    read: boolean;
     created_at: string;
 }
 
@@ -34,7 +34,7 @@ export function useNotifications() {
 
         if (data) {
             setNotifications(data);
-            setUnreadCount(data.filter(n => !n.is_read).length);
+            setUnreadCount(data.filter(n => !n.read).length);
         }
     };
 
@@ -52,8 +52,6 @@ export function useNotifications() {
                     table: "notifications",
                 },
                 async (payload) => {
-                    // Check if this notification belongs to us (fetch user logic or rely on payload)
-                    // Ideally we pass user ID to hook or rely on checking payload.user_id
                     const { data: { user } } = await supabase.auth.getUser();
                     if (user && payload.new.user_id === user.id) {
                         const newNotif = payload.new as Notification;
@@ -63,9 +61,9 @@ export function useNotifications() {
                         // Toast
                         toast(newNotif.title, {
                             description: newNotif.message,
-                            action: newNotif.link ? {
+                            action: newNotif.link_url ? {
                                 label: "View",
-                                onClick: () => router.push(newNotif.link!)
+                                onClick: () => router.push(newNotif.link_url!)
                             } : undefined
                         });
                     }
@@ -86,15 +84,15 @@ export function useNotifications() {
         await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     };
 
-    const markAllRead = async () => {
+    const markAllAsRead = async () => {
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         setUnreadCount(0);
 
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-            await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id);
+            await supabase.from("notifications").update({ read: true }).eq("user_id", user.id);
         }
     };
 
-    return { notifications, unreadCount, markAsRead, markAllRead };
+    return { notifications, unreadCount, markAsRead, markAllAsRead };
 }

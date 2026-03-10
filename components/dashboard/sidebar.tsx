@@ -18,6 +18,7 @@ import {
     Building2,
     BarChart3,
     CheckSquare,
+    History as HistoryIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ const navigation: NavItem[] = [
     { name: "Calls", href: "/dashboard/calls", icon: Phone },
     { name: "Email", href: "/dashboard/email", icon: Mail },
     { name: "Analytics", href: "/dashboard/reports", icon: BarChart3 },
+    { name: "Activities", href: "/dashboard/activities", icon: HistoryIcon },
     { name: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
     { name: "Team", href: "/dashboard/team", icon: Users, roles: ["admin", "manager"] },
     { name: "Automations", href: "/dashboard/automations", icon: Zap, roles: ["admin", "manager"] },

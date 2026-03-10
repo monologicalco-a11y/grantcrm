@@ -32,15 +32,20 @@ export interface PaginatedResult<T> {
 // FETCHERS
 // ============================================
 
-async function fetchDeals(): Promise<Deal[]> {
+async function fetchDeals(pipelineId?: string): Promise<Deal[]> {
     const supabase = createClient();
-    const { data, error } = await supabase
+    let query = supabase
         .from("deals")
         .select(`
-      *,
-      contact:contacts(id, first_name, last_name, email)
-    `)
-        .order("created_at", { ascending: false });
+            *,
+            contact:contacts(id, first_name, last_name, email)
+        `);
+
+    if (pipelineId && pipelineId !== 'all') {
+        query = query.eq('pipeline_id', pipelineId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error) throw error;
     return data || [];
 }
@@ -113,14 +118,18 @@ async function fetchDealStats(profileId?: string, isAdmin?: boolean): Promise<{ 
 /**
  * Fetch all deals (legacy, no pagination)
  */
-export function useDeals() {
-    const swr = useSWR<Deal[]>("deals", fetchDeals, {
-        revalidateOnFocus: false,
-        dedupingInterval: 5000,
-    });
+export function useDeals(pipelineId?: string) {
+    const swr = useSWR<Deal[]>(
+        pipelineId ? `deals-${pipelineId}` : "deals",
+        () => fetchDeals(pipelineId),
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 5000,
+        }
+    );
 
     const realtimeKey = useMemo(() => (key: unknown) =>
-        typeof key === "string" && (key === "deals" || key.startsWith("deals-paginated")),
+        typeof key === "string" && (key === "deals" || key.startsWith("deals-")),
         []);
 
     useRealtime("deals", realtimeKey);
@@ -226,6 +235,43 @@ export function useDeleteDeal() {
         async (_, { arg }: { arg: string }) => {
             const supabase = createClient();
             const { error } = await supabase.from("deals").delete().eq("id", arg);
+            if (error) throw error;
+        }
+    );
+}
+
+export function useCreatePipeline() {
+    return useSWRMutation(
+        "pipelines",
+        async (_, { arg }: { arg: Omit<Pipeline, "id" | "created_at"> }) => {
+            const supabase = createClient();
+            const { data, error } = await supabase.from("pipelines").insert([arg]).select().single();
+            if (error) throw error;
+            return data;
+        },
+        { revalidate: true }
+    );
+}
+
+export function useUpdatePipeline() {
+    return useSWRMutation(
+        "pipelines",
+        async (_, { arg }: { arg: { id: string; updates: Partial<Pipeline> } }) => {
+            const supabase = createClient();
+            const { data, error } = await supabase.from("pipelines").update(arg.updates).eq("id", arg.id).select().single();
+            if (error) throw error;
+            return data;
+        },
+        { revalidate: true }
+    );
+}
+
+export function useDeletePipeline() {
+    return useSWRMutation(
+        "pipelines",
+        async (_, { arg }: { arg: string }) => {
+            const supabase = createClient();
+            const { error } = await supabase.from("pipelines").delete().eq("id", arg);
             if (error) throw error;
         }
     );

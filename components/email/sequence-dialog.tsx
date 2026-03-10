@@ -71,7 +71,7 @@ export function SequenceDialog({
     const { trigger: updateSequence, isMutating: isUpdating } = useUpdateEmailSequence();
 
     const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema) as any,
+        resolver: zodResolver(formSchema),
         defaultValues: {
             name: "",
             smtp_config_id: "",
@@ -121,14 +121,14 @@ export function SequenceDialog({
             if (sequence) {
                 await updateSequence({
                     id: sequence.id,
-                    updates: sequenceData as any,
+                    updates: sequenceData as Partial<EmailSequence>,
                 });
                 toast.success("Sequence updated");
             } else {
                 await createSequence({
                     ...sequenceData,
                     organization_id: organizationId,
-                } as any);
+                } as Omit<EmailSequence, "id" | "created_at" | "updated_at">);
                 toast.success("Sequence created");
             }
             onSuccess?.();

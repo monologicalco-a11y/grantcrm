@@ -328,7 +328,7 @@ export class SipService {
         if (session) session.sendDTMF(tone);
     }
 
-    public巡mute(isMuted: boolean, accountId?: string) {
+    public mute(isMuted: boolean, accountId?: string) {
         const id = accountId || this._activeUAId;
         const session = id ? this.sessions.get(id) : null;
         if (session) {

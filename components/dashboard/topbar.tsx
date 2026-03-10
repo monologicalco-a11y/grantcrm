@@ -32,7 +32,7 @@ export function Topbar() {
     const { theme, setTheme } = useTheme();
 
     // Use Real-time Notifications Hook
-    const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications();
+    const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
     const { open: openCommandPalette } = useCommandPaletteStore();
     const { openDialer } = useDialerStore();
@@ -114,7 +114,7 @@ export function Topbar() {
                     <div className="flex items-center justify-between px-4 py-2">
                         <DropdownMenuLabel className="p-0">Notifications</DropdownMenuLabel>
                         {unreadCount > 0 && (
-                            <Button variant="ghost" size="sm" className="h-auto px-2 text-[10px]" onClick={markAllRead}>
+                            <Button variant="ghost" size="sm" className="h-auto px-2 text-[10px]" onClick={markAllAsRead}>
                                 Mark all read
                             </Button>
                         )}
@@ -129,16 +129,15 @@ export function Topbar() {
                             notifications.map((n) => (
                                 <DropdownMenuItem
                                     key={n.id}
-                                    className={`flex flex-col items-start p-4 gap-1 cursor-pointer ${!n.is_read ? 'bg-muted/50' : ''}`}
+                                    className={`flex flex-col items-start p-4 gap-1 cursor-pointer ${!n.read ? 'bg-muted/50' : ''}`}
                                     onClick={() => {
                                         markAsRead(n.id);
-                                        if (n.link) router.push(n.link);
+                                        if (n.link_url) router.push(n.link_url);
                                     }}
                                 >
-                                    <div className="flex w-full justify-between items-center">
-                                        <span className={`text-sm ${!n.is_read ? 'font-semibold' : ''}`}>{n.title}</span>
-                                        <span className="text-[10px] text-muted-foreground">
-                                            {/* Simple time logic, consider date-fns for relative time */}
+                                    <div className="flex w-full justify-between items-center px-1">
+                                        <span className={`text-sm ${!n.read ? 'font-semibold' : ''}`}>{n.title}</span>
+                                        <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
                                             {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </div>

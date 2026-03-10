@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Phone } from "lucide-react";
+import { Phone, History } from "lucide-react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,7 +47,9 @@ export function ActivityTimeline() {
         <Card className="h-full">
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Recent Activity</CardTitle>
-                <Button variant="ghost" size="sm">View all</Button>
+                <Link href="/dashboard/activities">
+                    <Button variant="ghost" size="sm">View all</Button>
+                </Link>
             </CardHeader>
             <CardContent className="space-y-4">
                 {myActivities?.map((activity) => (

@@ -443,7 +443,7 @@ export function CallWidget() {
                                                             <div className="flex items-center gap-2">
                                                                 <div className={cn(
                                                                     "h-1.5 w-1.5 rounded-full",
-                                                                    (typeof window !== "undefined" && (window as any).__SIP_SERVICE__)?.isRegistered(acc.id) ? "bg-green-500" : "bg-muted-foreground/30"
+                                                                    (typeof window !== "undefined" ? window.__SIP_SERVICE__?.isRegistered(acc.id) : false) ? "bg-green-500" : "bg-muted-foreground/30"
                                                                 )} />
                                                                 <span className="text-sm font-medium">{acc.name || acc.sip_username}</span>
                                                             </div>

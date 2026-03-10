@@ -81,6 +81,19 @@ export interface Deal {
     } | null;
 }
 
+export interface DealNote {
+    id: string;
+    deal_id: string;
+    author_id: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+    author?: {
+        full_name: string;
+        avatar_url?: string;
+    };
+}
+
 export interface Pipeline {
     id: string;
     organization_id: string;
@@ -225,7 +238,21 @@ export interface Email {
     folder: "inbox" | "sent" | "archive" | "trash";
     is_read: boolean;
     has_attachment: boolean;
+    opened_at?: string;
+    clicked_at?: string;
+    open_count?: number;
+    click_count?: number;
     received_at: string;
+    created_at: string;
+}
+
+export interface EmailTrackingEvent {
+    id: string;
+    email_id: string;
+    event_type: "open" | "click";
+    link_url?: string;
+    user_agent?: string;
+    ip_address?: string;
     created_at: string;
 }
 

@@ -17,7 +17,8 @@ import {
     Loader2,
     Edit,
     Zap,
-    MailOpen
+    MailOpen,
+    Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +34,7 @@ import { TemplateDialog } from "@/components/email/template-dialog";
 import { EmailComposerDialog } from "@/components/email/email-composer-dialog";
 import { SequenceDialog } from "@/components/email/sequence-dialog";
 import { SequenceEnrollmentsManager } from "@/components/email/sequence-enrollments-manager";
+import { EmailAnalytics } from "@/components/email/email-analytics";
 import type { EmailTemplate, EmailSequence, Email } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -50,7 +52,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 // Note: Email inbox would need IMAP/API integration - templates work with database
 
 // Email folders type
-type EmailFolder = "inbox" | "sent" | "starred" | "archive" | "trash" | "sequences" | "templates";
+type EmailFolder = "inbox" | "sent" | "starred" | "archive" | "trash" | "sequences" | "templates" | "analytics";
 
 // ... existing interfaces ...
 
@@ -371,6 +373,14 @@ export default function EmailPage() {
                         </h3>
                         <div className="space-y-1">
                             <Button
+                                variant={activeFolder === "analytics" ? "secondary" : "ghost"}
+                                className={cn("w-full justify-start", activeFolder === "analytics" && "font-semibold")}
+                                onClick={() => setActiveFolder("analytics")}
+                            >
+                                <Activity className="mr-2 h-4 w-4" />
+                                Analytics
+                            </Button>
+                            <Button
                                 variant={activeFolder === "sequences" ? "secondary" : "ghost"}
                                 className={cn("w-full justify-start", activeFolder === "sequences" && "font-semibold")}
                                 onClick={() => setActiveFolder("sequences")}
@@ -408,11 +418,12 @@ export default function EmailPage() {
 
                 {/* Main Content */}
                 <div className="lg:col-span-3">
-                    <Tabs defaultValue="inbox" value={['sequences', 'templates'].includes(activeFolder) ? activeFolder : 'inbox'}>
+                    <Tabs defaultValue="inbox" value={['sequences', 'templates', 'analytics'].includes(activeFolder) ? activeFolder : 'inbox'}>
                         <TabsList className="hidden">
                             <TabsTrigger value="inbox">Inbox</TabsTrigger>
                             <TabsTrigger value="sequences">Sequences</TabsTrigger>
                             <TabsTrigger value="templates">Templates</TabsTrigger>
+                            <TabsTrigger value="analytics">Analytics</TabsTrigger>
                         </TabsList>
 
                         {/* We reuse 'inbox' tab for all email lists */}
@@ -776,6 +787,10 @@ export default function EmailPage() {
                                     )}
                                 </CardContent>
                             </Card>
+                        </TabsContent>
+
+                        <TabsContent value="analytics">
+                            <EmailAnalytics />
                         </TabsContent>
                     </Tabs>
                 </div>

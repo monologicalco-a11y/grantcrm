@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
 // Admin Client for Public API (Bypasses RLS)
 const supabaseUrl = "https://xqsewdcggvujkmddtltd.supabase.co";
@@ -8,10 +7,6 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Schema for header validation
-const HEADERS_SCHEMA = z.object({
-    "x-form-id": z.string().uuid(),
-});
 
 // Helper to validate origin/cors (placeholder for now)
 // Helper to validate origin/cors (placeholder for now)
@@ -25,18 +20,46 @@ export async function POST(request: Request) {
     try {
         // const supabase = createClient(); // REMOVED standard client
 
-        // 1. Validate Headers
-        const headers = Object.fromEntries(request.headers.entries());
-        const headerValidation = HEADERS_SCHEMA.safeParse(headers);
+        // 1. Validate Form ID (Header or Body)
+        const headersObj = Object.fromEntries(
+            Array.from(request.headers.entries()).map(([k, v]) => [k.toLowerCase(), v])
+        );
+        let formId = headersObj["x-form-id"];
+        const contentType = headersObj["content-type"];
 
-        if (!headerValidation.success) {
-            return NextResponse.json(
-                { error: "Missing or invalid X-Form-ID header" },
-                { status: 400 }
-            );
+        console.log("DEBUG: formId from headers:", formId);
+        console.log("DEBUG: contentType:", contentType);
+
+        let body: Record<string, any> = {}; // Initialize body here for later use
+
+        if (!formId) {
+            // Check body for x-form-id (standard HTML forms)
+            if (contentType?.includes("application/x-www-form-urlencoded") || contentType?.includes("multipart/form-data")) {
+                const formData = await request.formData();
+                formId = formData.get("x-form-id") as string;
+                body = Object.fromEntries(formData.entries()); // Populate body from formData
+                console.log("DEBUG: formId from formData:", formId);
+            } else if (contentType?.includes("application/json")) {
+                // Clone request to read body multiple times if needed
+                body = await request.clone().json();
+                formId = body["x-form-id"];
+                console.log("DEBUG: formId from JSON body:", formId);
+            }
+        } else {
+            // If formId was found in headers, still parse body if needed for other fields
+            if (contentType?.includes("application/json")) {
+                body = await request.json();
+            } else if (contentType?.includes("application/x-www-form-urlencoded") || contentType?.includes("multipart/form-data")) {
+                const formData = await request.formData();
+                body = Object.fromEntries(formData.entries());
+            }
         }
 
-        const formId = headerValidation.data["x-form-id"];
+
+        if (!formId) {
+            console.log("DEBUG: Returning 400 - missing formId");
+            return NextResponse.json({ error: "Missing Form ID" }, { status: 400 });
+        }
 
         // 2. Fetch Form Configuration
         const { data: form, error: formError } = await supabase
@@ -53,31 +76,10 @@ export async function POST(request: Request) {
             );
         }
 
-        // 3. Rate Limiting (Placeholder for Implementation Plan)
-        // Check key/IP rate limits here
-
-        // 4. Parse Body
-        let body: Record<string, any> = {};
-        const contentType = request.headers.get("content-type") || "";
-
-        if (contentType.includes("application/json")) {
-            body = await request.json();
-        } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
-            const formData = await request.formData();
-            body = Object.fromEntries(formData.entries());
-        }
-
-        // 5. Spam Check (Honeypot)
-        // Check if 'website_url_check' (hidden field) is filled?
-        // if (body._honeypot) return NextResponse.json({ success: true }); // Silent fail
-
         // 6. Map Fields
-        // Config: { "form_field": "db_field" }
         const fieldMapping = form.config as Record<string, string>;
         const contactData: Record<string, any> = {
             organization_id: form.organization_id,
-            // status: "New", // Not in schema
-            // source: form.source || "Web Form", // Not in schema -> moved to custom_fields
             tags: ["Web Lead", form.name],
             custom_fields: {
                 source: form.source || "Web Form",
@@ -85,7 +87,6 @@ export async function POST(request: Request) {
             }
         };
 
-        // Auto-map common fields if no mapping provided, or use mapping
         const basicFields = ["first_name", "last_name", "email", "phone", "company", "job_title"];
 
         // Explicit mapping
@@ -98,19 +99,12 @@ export async function POST(request: Request) {
         // Fallback: If no mapping, try direct match
         if (Object.keys(fieldMapping).length === 0) {
             basicFields.forEach(field => {
-                if (body[field]) contactData[field] = body[field];
+                const val = body[field] || body[field.replace('_', '')] || body[field.replace('_', ' ')];
+                if (val) contactData[field] = val;
             });
-            // Try snake_case conversion?
         }
 
-        // Capture unmapped fields to notes/custom_fields?
-        // contactData.custom_fields = ...
-
         // 7. Insert Contact
-        // Ensure no invalid columns sneak in from field mapping
-        delete contactData.source;
-        delete contactData.status;
-
         const { data: contact, error: insertError } = await supabase
             .from("contacts")
             .insert(contactData)
@@ -126,8 +120,6 @@ export async function POST(request: Request) {
         }
 
         // 8. Create Notification for Admins
-        // We can use a trigger, or do it here.
-        // Fetch admins
         const { data: admins } = await supabase
             .from("profiles")
             .select("user_id")
@@ -141,25 +133,38 @@ export async function POST(request: Request) {
                 title: "New Web Lead",
                 message: `${contact.first_name} ${contact.last_name || ""} from ${form.name}`,
                 type: "lead",
-                link: `/dashboard/contacts?id=${contact.id}`
+                link: `/dashboard/contacts/${contact.id}`
             }));
             await supabase.from("notifications").insert(notifs);
         }
 
-        // 9. Response / Redirect
+        // 9. Trigger Automation
+        try {
+            const { evaluateTriggers } = require("@/lib/automations/engine");
+            await evaluateTriggers("lead_created", form.organization_id, {
+                contactId: contact.id,
+                formId: form.id,
+                ...body
+            });
+        } catch (autoError) {
+            console.error("Failed to trigger automation:", autoError);
+        }
+
+        // 10. Response / Redirect
         if (form.redirect_url) {
             return NextResponse.redirect(new URL(form.redirect_url), 302);
         }
 
         return NextResponse.json({ success: true, id: contact.id }, { status: 200 });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Web Lead API Error:", error);
+        const err = error as any;
         return NextResponse.json(
             {
-                error: (error?.message || "Internal Server Error"),
-                stack: error?.stack,
-                details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+                error: (err?.message || "Internal Server Error"),
+                stack: err?.stack,
+                details: JSON.stringify(err, Object.getOwnPropertyNames(err))
             },
             { status: 500 }
         );

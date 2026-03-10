@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { Users, Briefcase, DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActiveProfile, useContactCount, useDealStats } from "@/hooks/use-data";
+import { useActiveProfile } from "@/hooks/use-data";
+import { useAnalytics } from "@/lib/hooks/use-analytics";
 import { useMemo } from "react";
 
 const item = {
@@ -15,42 +16,42 @@ const item = {
 export function StatsGrid() {
     const { data: profile, isLoading: profileLoading } = useActiveProfile();
     const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+    const ownerId = isAdmin ? undefined : profile?.id;
 
-    const { data: contactCount, isLoading: contactsLoading } = useContactCount(profile?.id, isAdmin);
-    const { data: dealStats, isLoading: dealsLoading } = useDealStats(profile?.id, isAdmin);
+    const { data: analytics, isLoading: analyticsLoading } = useAnalytics(ownerId);
 
     const stats = useMemo(() => [
         {
-            title: "My Contacts",
-            value: contactCount?.toString() || "0",
-            change: "+12.5%",
+            title: "Connect Rate (7d)",
+            value: analytics ? (analytics.calls.total > 0 ? `${((analytics.calls.connected / analytics.calls.total) * 100).toFixed(1)}%` : "0%") : "0%",
+            change: `${analytics?.calls.total || 0} total calls`,
             trend: "up",
             icon: Users,
         },
         {
             title: "Active Deals",
-            value: dealStats?.activeCount?.toString() || "0",
-            change: "+8.2%",
+            value: analytics?.deals.activeCount?.toString() || "0",
+            change: `${analytics?.deals.count || 0} in pipeline`,
             trend: "up",
             icon: Briefcase,
         },
         {
+            title: "Weighted Revenue",
+            value: `$${(analytics?.deals.weightedValue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+            change: "Pipeline forecast",
+            trend: "up",
+            icon: TrendingUp,
+        },
+        {
             title: "Revenue (Closed)",
-            value: `$${(dealStats?.totalRevenue || 0).toLocaleString()}`,
-            change: "+23.1%",
+            value: `$${(analytics?.deals.wonValue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+            change: "Total closed won",
             trend: "up",
             icon: DollarSign,
         },
-        {
-            title: "Conversion Rate",
-            value: "24.8%",
-            change: "-2.4%",
-            trend: "down",
-            icon: TrendingUp,
-        },
-    ], [contactCount, dealStats]);
+    ], [analytics]);
 
-    if (profileLoading || contactsLoading || dealsLoading) {
+    if (profileLoading || analyticsLoading) {
         return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => (
@@ -93,10 +94,9 @@ export function StatsGrid() {
                                 ) : (
                                     <ArrowDownRight className="h-4 w-4 text-red-500 mr-1" />
                                 )}
-                                <span className={stat.trend === "up" ? "text-green-500" : "text-red-500"}>
+                                <span className={stat.trend === "up" ? "text-green-500" : "text-muted-foreground"}>
                                     {stat.change}
                                 </span>
-                                <span className="text-muted-foreground ml-1">vs last month</span>
                             </div>
                         </CardContent>
                     </Card>

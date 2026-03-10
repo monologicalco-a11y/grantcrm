@@ -28,16 +28,14 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
-import { useDeals, useDeleteDeal, useActiveProfile } from "@/hooks/use-data";
+import { useDeals, useDeleteDeal, useActiveProfile, usePipelines } from "@/hooks/use-data";
 import { DealDialog } from "@/components/deals/deal-dialog";
+import { DealNotesSheet } from "@/components/deals/deal-notes-sheet";
 import { DealFilters, type DealFilterValues } from "@/components/deals/deal-filters";
-import type { Deal } from "@/types";
+import type { Deal, Pipeline } from "@/types";
 
-// Pipeline ID - would come from API in production
-const DEMO_PIPELINE_ID = "00000000-0000-0000-0000-000000000001";
-
-// Default pipeline stages
-const stages = [
+// Fallback pipeline stages if no pipeline is selected or available
+const FALLBACK_STAGES = [
     { id: "lead", name: "Lead", color: "bg-slate-500" },
     { id: "qualified", name: "Qualified", color: "bg-blue-500" },
     { id: "proposal", name: "Proposal", color: "bg-yellow-500" },
@@ -48,10 +46,12 @@ const stages = [
 function DealCard({
     deal,
     onEdit,
+    onNotes,
     onDelete,
 }: {
     deal: Deal;
     onEdit: () => void;
+    onNotes: () => void;
     onDelete: () => void;
 }) {
     const contactName = deal.contact
@@ -78,6 +78,7 @@ function DealCard({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={onEdit}>Edit Deal</DropdownMenuItem>
+                        <DropdownMenuItem onClick={onNotes}>View / Add Notes</DropdownMenuItem>
                         <DropdownMenuItem>View Contact</DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive" onClick={onDelete}>
                             Delete
@@ -119,9 +120,11 @@ function DealCard({
 }
 
 export default function DealsPage() {
-    const [selectedPipeline, setSelectedPipeline] = useState("default");
+    const { data: pipelines } = usePipelines();
+    const [selectedPipelineId, setSelectedPipelineId] = useState<string>("all");
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+    const [notesDeal, setNotesDeal] = useState<Deal | null>(null);
     const [filters, setFilters] = useState<DealFilterValues>({
         search: "",
         stage: "all",
@@ -131,9 +134,13 @@ export default function DealsPage() {
         maxProbability: "",
     });
 
-    const { data: deals, isLoading, mutate } = useDeals();
+    const { data: deals, isLoading, mutate } = useDeals(selectedPipelineId);
     const { trigger: deleteDeal } = useDeleteDeal();
     const { data: activeProfile } = useActiveProfile();
+
+    const selectedPipeline = pipelines?.find((p: Pipeline) => p.id === selectedPipelineId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stages = ((selectedPipeline?.stages as any[]) || FALLBACK_STAGES) as { id: string; name: string; color: string }[];
 
     const filteredDeals = (deals || []).filter((deal) => {
         const matchesSearch = deal.name.toLowerCase().includes(filters.search.toLowerCase());
@@ -195,14 +202,15 @@ export default function DealsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Select value={selectedPipeline} onValueChange={setSelectedPipeline}>
+                    <Select value={selectedPipelineId} onValueChange={setSelectedPipelineId}>
                         <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="Select Pipeline" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="default">Default Pipeline</SelectItem>
-                            <SelectItem value="enterprise">Enterprise Sales</SelectItem>
-                            <SelectItem value="smb">SMB Pipeline</SelectItem>
+                            <SelectItem value="all">All Pipelines</SelectItem>
+                            {pipelines?.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <DealFilters
@@ -308,6 +316,7 @@ export default function DealsPage() {
                                             key={deal.id}
                                             deal={deal}
                                             onEdit={() => handleEdit(deal)}
+                                            onNotes={() => setNotesDeal(deal)}
                                             onDelete={() => handleDelete(deal.id)}
                                         />
                                     ))}
@@ -331,10 +340,19 @@ export default function DealsPage() {
                     if (!open) setEditingDeal(null);
                 }}
                 deal={editingDeal}
-                pipelineId={DEMO_PIPELINE_ID}
+                pipelineId={selectedPipelineId === 'all' ? (pipelines?.[0]?.id || "") : selectedPipelineId}
                 organizationId={activeProfile?.organization_id || ""}
                 stages={stages}
                 onSuccess={handleSuccess}
+            />
+
+            {/* Deal Notes Sheet */}
+            <DealNotesSheet
+                open={!!notesDeal}
+                onOpenChange={(open) => {
+                    if (!open) setNotesDeal(null);
+                }}
+                deal={notesDeal}
             />
         </motion.div>
     );

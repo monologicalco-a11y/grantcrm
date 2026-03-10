@@ -6,7 +6,8 @@ import React, { useEffect, useState, ReactNode } from "react";
 interface ClientMotionProps {
     children: ReactNode;
     component?: string;
-    [key: string]: any; // Allow motion props and DOM props
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
 }
 
 /**
@@ -35,19 +36,26 @@ export function ClientMotion({
     ];
 
     if (!isMounted) {
-        const domProps: Record<string, any> = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const domProps: Record<string, unknown> = {};
         Object.keys(props).forEach(key => {
             if (!motionPropsList.includes(key)) {
                 domProps[key] = props[key];
             }
         });
 
-        const Tag = component as any;
+        const Tag = component as React.ElementType;
         return <Tag {...domProps}>{children}</Tag>;
     }
 
-    // Client-side: Dynamic access to motion components
-    const MotionTag = (motion as any)[component] || motion.div;
-
-    return <MotionTag {...props}>{children}</MotionTag>;
+    // Client-side: Map to known motion components statically
+    switch (component) {
+        case "span": return <motion.span {...props}>{children}</motion.span>;
+        case "section": return <motion.section {...props}>{children}</motion.section>;
+        case "article": return <motion.article {...props}>{children}</motion.article>;
+        case "main": return <motion.main {...props}>{children}</motion.main>;
+        case "nav": return <motion.nav {...props}>{children}</motion.nav>;
+        case "div":
+        default: return <motion.div {...props}>{children}</motion.div>;
+    }
 }

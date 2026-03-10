@@ -1,7 +1,7 @@
 // Simple ringtone generator - creates an actual audible tone
 // Save this as ringtone.js and run with: node ringtone.js
 
-const fs = require('fs');
+import * as fs from 'fs';
 
 // WAV file parameters
 const sampleRate = 8000;

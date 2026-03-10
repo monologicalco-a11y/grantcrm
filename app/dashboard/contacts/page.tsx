@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     Plus,
@@ -58,6 +59,7 @@ import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { ContactFilters, type ContactFilterValues } from "@/components/contacts/contact-filters";
 import { ImportDialog } from "@/components/contacts/import-dialog";
 import { StatusManagementDialog } from "@/components/contacts/status-management-dialog";
+import { BulkEmailDialog } from "@/components/contacts/bulk-email-dialog";
 import type { Contact } from "@/types";
 import { useDialerStore } from "@/lib/stores";
 import { UserCheck, Play } from "lucide-react";
@@ -77,6 +79,7 @@ function getScoreColor(score: number) {
 }
 
 export default function ContactsPage() {
+    const router = useRouter();
     const [dialogOpen, setDialogOpen] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -84,6 +87,7 @@ export default function ContactsPage() {
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]); // Preserved ID-based selection
     const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
     const [composerOpen, setComposerOpen] = useState(false);
+    const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
     const [composerContact, setComposerContact] = useState<{ email: string, name?: string } | null>(null);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -492,6 +496,10 @@ export default function ContactsPage() {
                                         <Play className="h-4 w-4 mr-2" />
                                         Auto-Dial ({selectCount})
                                     </Button>
+                                    <Button variant="outline" onClick={() => setBulkEmailOpen(true)}>
+                                        <Mail className="h-4 w-4 mr-2" />
+                                        Email
+                                    </Button>
                                     <Button variant="outline" onClick={() => setEnrollDialogOpen(true)}>
                                         <Mail className="h-4 w-4 mr-2" />
                                         Enroll
@@ -604,7 +612,7 @@ export default function ContactsPage() {
                                                     onCheckedChange={() => toggleSelection(contact.id)}
                                                 />
                                             </TableCell>
-                                            <TableCell onClick={() => handleEdit(contact)}>
+                                            <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                                                 <div className="flex items-center gap-3">
                                                     <Avatar>
                                                         <AvatarFallback>
@@ -627,7 +635,7 @@ export default function ContactsPage() {
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell onClick={() => handleEdit(contact)}>
+                                            <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                                                 {contact.last_call_at ? (
                                                     <div className="flex flex-col">
                                                         <span className="text-sm font-medium">
@@ -641,7 +649,7 @@ export default function ContactsPage() {
                                                     <span className="text-xs text-muted-foreground">-</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell onClick={() => handleEdit(contact)}>
+                                            <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                                                 {contact.last_call_status ? (
                                                     <Badge
                                                         variant="outline"
@@ -659,19 +667,19 @@ export default function ContactsPage() {
                                                     <span className="text-xs text-muted-foreground">-</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell onClick={() => handleEdit(contact)}>
+                                            <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                                                 <Badge variant="secondary" className="capitalize">
                                                     {contact.status || "new"}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell onClick={() => handleEdit(contact)}>
+                                            <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                                                 <span
                                                     className={`font-semibold ${getScoreColor(contact.lead_score || 0)}`}
                                                 >
                                                     {contact.lead_score || 0}
                                                 </span>
                                             </TableCell>
-                                            <TableCell onClick={() => handleEdit(contact)}>
+                                            <TableCell onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                                                 {contact.owner_id ? (
                                                     <div className="flex items-center gap-2">
                                                         <Avatar className="h-6 w-6">
@@ -788,6 +796,18 @@ export default function ContactsPage() {
                 onOpenChange={setComposerOpen}
                 defaultTo={composerContact?.email}
                 organizationId={activeProfile?.organization_id || ""}
+            />
+            <BulkEmailDialog
+                open={bulkEmailOpen}
+                onOpenChange={setBulkEmailOpen}
+                contactIds={selectedContacts}
+                isSelectAllMatching={isSelectAllMatching}
+                totalMatches={totalItems}
+                filters={filters}
+                onSuccess={() => {
+                    setSelectedContacts([]);
+                    setIsSelectAllMatching(false);
+                }}
             />
 
             {/* Delete Confirmation Dialog */}
