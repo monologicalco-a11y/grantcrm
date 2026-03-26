@@ -1,5 +1,5 @@
 -- ========================================================
--- MASTER SECURITY & MULTI-TENANCY HARDENING
+-- MASTER SECURITY & MULTI-TENANCY HARDENING (v2 - FIX)
 -- Run this in the Supabase SQL Editor for all environments
 -- ========================================================
 
@@ -67,6 +67,8 @@ USING (
   )
 );
 
+-- 3. PROFILE & ORGANIZATION MANAGEMENT (Fixing Settings Page Access)
+
 -- Profile Security (Allow members to see team list)
 DROP POLICY IF EXISTS "profiles_org_read" ON profiles;
 CREATE POLICY "profiles_org_read" ON profiles FOR SELECT
@@ -74,9 +76,35 @@ USING (
   organization_id IN (SELECT p.organization_id FROM profiles p WHERE p.user_id = auth.uid())
 );
 
--- Admin Management (Update/Delete Profiles)
+-- Admin Management (Update/Delete Profiles in their Org)
 DROP POLICY IF EXISTS "profiles_admin_all" ON profiles;
 CREATE POLICY "profiles_admin_all" ON profiles FOR ALL
 USING (
-  EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
+  organization_id = (SELECT organization_id FROM profiles WHERE user_id = auth.uid())
+  AND (SELECT role FROM profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
+);
+
+-- Organization Management (Allow updating branding/settings)
+DROP POLICY IF EXISTS "org_update_admin" ON organizations;
+CREATE POLICY "org_update_admin" ON organizations FOR UPDATE
+USING (
+  id = (SELECT organization_id FROM profiles WHERE user_id = auth.uid())
+  AND (SELECT role FROM profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
+);
+
+-- API Key Management (Legacy)
+DROP POLICY IF EXISTS "api_keys_admin_all" ON api_keys;
+CREATE POLICY "api_keys_admin_all" ON api_keys FOR ALL
+USING (
+  organization_id = (SELECT organization_id FROM profiles WHERE user_id = auth.uid())
+  AND (SELECT role FROM profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
+);
+
+-- API Key Management (Modern Hashed Keys)
+ALTER TABLE public.organization_api_keys ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "org_api_keys_admin_all" ON organization_api_keys;
+CREATE POLICY "org_api_keys_admin_all" ON organization_api_keys FOR ALL
+USING (
+  organization_id = (SELECT organization_id FROM profiles WHERE user_id = auth.uid())
+  AND (SELECT role FROM profiles WHERE user_id = auth.uid()) IN ('admin', 'manager')
 );
