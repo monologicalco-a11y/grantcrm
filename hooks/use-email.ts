@@ -335,13 +335,19 @@ export function useUpdateEnrollment() {
 export function useDeleteEnrollment() {
     return useSWRMutation(
         "sequence-enrollments",
-        async (_, { arg }: { arg: { id: string; sequence_id: string } }) => {
-            const supabase = createClient();
-            const { error } = await supabase
-                .from("sequence_enrollments")
-                .delete()
-                .eq("id", arg.id);
-            if (error) throw error;
+        async (_, { arg }: { arg: { ids: string[]; sequence_id: string } }) => {
+            const res = await fetch("/api/sequences/enrollments/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enrollmentIds: arg.ids })
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || "Failed to remove contact from sequence");
+            }
+
+            return res.json();
         },
         {
             revalidate: true,
@@ -392,7 +398,7 @@ export function useSaveEmailAccount() {
         async (_, { arg }: { arg: SaveEmailAccountArgs & { orgId?: string } }) => {
             const { id, smtp_pass, imap_pass, orgId, ...rest } = arg;
 
-            const updates: any = { ...rest };
+            const updates: Record<string, unknown> = { ...rest };
 
             if (smtp_pass) updates.smtp_pass_plain = smtp_pass;
             if (imap_pass) updates.imap_pass_plain = imap_pass;

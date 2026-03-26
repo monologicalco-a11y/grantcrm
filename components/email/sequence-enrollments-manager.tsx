@@ -96,7 +96,7 @@ export function SequenceEnrollmentsManager({
 
     const handleDelete = async (id: string) => {
         try {
-            await deleteEnrollment({ id, sequence_id: sequenceId });
+            await deleteEnrollment({ ids: [id], sequence_id: sequenceId });
             toast.success("Contact removed from sequence");
         } catch (error) {
             console.error("Failed to remove contact:", error);
@@ -106,16 +106,13 @@ export function SequenceEnrollmentsManager({
 
     const handleBulkAction = async (action: 'pause' | 'resume' | 'delete') => {
         if (selectedIds.length === 0) return;
-        if (action === 'delete') {
-            // In a real app we might show a dialog, but removing confirm for automation
-        }
 
         setIsProcessing(true);
         try {
-            for (const id of selectedIds) {
-                if (action === 'delete') {
-                    await deleteEnrollment({ id, sequence_id: sequenceId }).catch(() => { });
-                } else {
+            if (action === 'delete') {
+                await deleteEnrollment({ ids: selectedIds, sequence_id: sequenceId });
+            } else {
+                for (const id of selectedIds) {
                     await updateEnrollment({
                         id,
                         updates: { status: action === 'resume' ? 'active' : 'paused' },
