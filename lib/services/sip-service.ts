@@ -446,21 +446,26 @@ export class SipService {
             }
         });
 
-        ua.on('registration_failed', (data: unknown) => {
-            const msg = data as { plugindata?: { data?: { error_code?: number; error?: string } } };
-            const errorCode = msg?.plugindata?.data?.error_code;
-            const errorMsg = msg?.plugindata?.data?.error;
+        ua.on('registration_failed', (data: any) => {
+            const result = data?.plugindata?.data?.result;
+            const dataObj = data?.plugindata?.data;
+            
+            const errorCode = dataObj?.error_code || result?.error_code || result?.code;
+            const errorMsg = dataObj?.error || result?.error || result?.reason || "Unknown SIP error";
+            
             console.error(`[SIP] ❌ Janus registration failed for ${id}: Error ${errorCode}: ${errorMsg}`);
             this._isRegistered.set(id, false);
-            toast.error(`SIP Registration failed: ${errorMsg || 'Unknown error'}`);
+            toast.error(`SIP Registration failed: ${errorMsg}`);
         });
 
-        ua.on('sip_error', (data: unknown) => {
-            const msg = data as { plugindata?: { data?: { error_code?: number; error?: string } } };
-            const errorCode = msg?.plugindata?.data?.error_code;
-            const errorMsg = msg?.plugindata?.data?.error;
+        ua.on('sip_error', (data: any) => {
+            const result = data?.plugindata?.data?.result;
+            const dataObj = data?.plugindata?.data;
+            
+            const errorCode = dataObj?.error_code || result?.error_code || result?.code;
+            const errorMsg = dataObj?.error || result?.error || result?.reason || "Unknown SIP error";
+            
             console.warn(`[SIP] ⚠️ SIP error for ${id}: Error ${errorCode}: ${errorMsg}`);
-            // Don't kill registration state — this is a call-level error, not registration
         });
 
         ua.on('accepted', () => {

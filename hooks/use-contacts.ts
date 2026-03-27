@@ -43,7 +43,7 @@ const DEFAULT_STATUSES: Omit<ContactStatus, "id" | "organization_id" | "created_
     { name: "not_potential", label: "Not potential", color: "slate", order: 7 },
     { name: "voice_message", label: "Voice message", color: "purple", order: 8 },
     { name: "depositor", label: "Depositor", color: "green", order: 9 },
-    { name: "high_potential", label: "High potential", color: "yellow", order: 10 },
+    { name: "high_potential", label: "High Potential", color: "yellow", order: 10 },
 ];
 
 // ============================================

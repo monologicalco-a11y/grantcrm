@@ -159,14 +159,17 @@ export class JanusClient {
             // Janus SIP plugin uses data.result.event for success events
             // and data.error_code for error events
             let event: string | undefined;
+            const result = data.result as Record<string, unknown> | undefined;
 
-            if (data.result && typeof data.result === "object") {
-                event = (data.result as Record<string, unknown>).event as string;
+            if (result && typeof result === "object") {
+                event = result.event as string;
             }
 
             // If there's an error_code, emit it as sip_error (not always registration_failed)
-            if (data.error_code) {
-                console.error(`[JanusClient] ❌ SIP Error ${data.error_code}: ${data.error}`);
+            if (data.error_code || (result && result.error_code)) {
+                const code = data.error_code || (result?.error_code as number);
+                const err = data.error || (result?.error as string) || (result?.reason as string);
+                console.error(`[JanusClient] ❌ SIP Error ${code}: ${err}`);
                 if (!event) {
                     event = "sip_error";
                 }
@@ -180,8 +183,10 @@ export class JanusClient {
                     console.log(`[JanusClient] ✅ Found handler for "${event}", calling it...`);
                     handler(msg);
                 } else {
-                    console.warn(`[JanusClient] ⚠️ No handler registered for event "${event}"`);
+                    console.warn(`[JanusClient] ⚠️ No handler registered for event "${event}". Full msg:`, JSON.stringify(msg, null, 2));
                 }
+            } else {
+                console.warn(`[JanusClient] ⚠️ Could not determine event type from data:`, JSON.stringify(data, null, 2));
             }
         }
 

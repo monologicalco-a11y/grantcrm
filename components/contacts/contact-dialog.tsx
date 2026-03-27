@@ -20,6 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Tabs,
     TabsContent,
@@ -276,11 +277,15 @@ export function ContactDialog({
                                          <SelectValue placeholder="Select status" />
                                      </SelectTrigger>
                                      <SelectContent>
-                                         {statuses?.map((s) => (
-                                             <SelectItem key={s.id} value={s.name}>
-                                                 {s.label}
-                                             </SelectItem>
-                                         ))}
+                                         <ScrollArea className="h-[200px]">
+                                             <div className="p-1">
+                                                 {statuses?.map((s) => (
+                                                     <SelectItem key={s.id} value={s.name.toLowerCase()}>
+                                                         {s.label}
+                                                     </SelectItem>
+                                                 ))}
+                                             </div>
+                                         </ScrollArea>
                                      </SelectContent>
                                  </Select>
                              </div>

@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { LeadScoreBadge } from "@/components/contacts/lead-score-badge";
 import { ContactStatusSelector } from "@/components/contacts/contact-status-selector";
+import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveProfile } from "@/hooks/use-data";
 import { toast } from "sonner";
@@ -63,6 +64,7 @@ export default function ContactDetailPage() {
     const [noteContent, setNoteContent] = useState("");
     const [isSavingNote, setIsSavingNote] = useState(false);
     const [isScoring, setIsScoring] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
     const handleScoreContact = async () => {
         if (isScoring) return;
@@ -483,7 +485,13 @@ export default function ContactDetailPage() {
                         <CardHeader>
                             <div className="flex justify-between items-center">
                                 <CardTitle>Contact Details</CardTitle>
-                                <Button size="sm" variant="outline"><Edit2 className="h-4 w-4 mr-2" /> Edit</Button>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => setIsEditDialogOpen(true)}
+                                >
+                                    <Edit2 className="h-4 w-4 mr-2" /> Edit
+                                </Button>
                             </div>
                         </CardHeader>
                         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
@@ -530,6 +538,18 @@ export default function ContactDetailPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {profile && contact && (
+                <ContactDialog
+                    open={isEditDialogOpen}
+                    onOpenChange={setIsEditDialogOpen}
+                    contact={contact}
+                    organizationId={profile.organization_id}
+                    onSuccess={() => {
+                        window.location.reload();
+                    }}
+                />
+            )}
         </div>
     );
 }
