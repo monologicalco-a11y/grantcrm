@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWaveform } from "@/hooks/use-waveform";
 import { VoicemailUpload } from "./voicemail-upload";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 interface Contact {
@@ -56,6 +56,25 @@ export const ActiveCall = ({
     const volumes = useWaveform(stream, status === "active", 20);
     const [voicemailFile, setVoicemailFile] = useState<File | null>(null);
     const [isDropping, setIsDropping] = useState(false);
+    const [quality, setQuality] = useState<"good" | "fair" | "poor" | "unknown">("unknown");
+
+    useEffect(() => {
+        const handleQuality = (e: CustomEvent<{ quality: "good" | "fair" | "poor" | "unknown" }>) => {
+            if (e.detail?.quality) setQuality(e.detail.quality);
+        };
+        window.addEventListener("sip:call:quality", handleQuality as EventListener);
+        return () => window.removeEventListener("sip:call:quality", handleQuality as EventListener);
+    }, []);
+
+    const handleDTMF = async (key: string) => {
+        try {
+            const { SipService } = await import("@/lib/services/sip-service");
+            await SipService.getInstance().sendDTMF(key);
+            // Optional: Play local DTMF sound here if desired
+        } catch (error) {
+            console.error("Failed to send DTMF", error);
+        }
+    };
 
     const handleVoicemailDrop = async () => {
         if (!voicemailFile) {
@@ -103,6 +122,15 @@ export const ActiveCall = ({
                     <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         {status} • {duration}
                     </span>
+                    {status === "active" && quality !== "unknown" && (
+                        <div className="flex items-center ml-1" title={`Network Quality: ${quality}`}>
+                            <div className="flex items-end gap-[1px] h-3 w-3">
+                                <div className={cn("w-[3px] rounded-t-sm", quality === "poor" ? "bg-red-500 h-[30%]" : quality === "fair" ? "bg-yellow-500 h-[30%]" : "bg-green-500 h-[30%]")} />
+                                <div className={cn("w-[3px] rounded-t-sm", quality === "poor" ? "bg-muted h-[60%]" : quality === "fair" ? "bg-yellow-500 h-[60%]" : "bg-green-500 h-[60%]")} />
+                                <div className={cn("w-[3px] rounded-t-sm", quality === "poor" ? "bg-muted h-full" : quality === "fair" ? "bg-muted h-full" : "bg-green-500 h-full")} />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -158,6 +186,30 @@ export const ActiveCall = ({
                                 <FileAudio className="mr-2 h-4 w-4" />
                                 Drop Voicemail
                             </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {showKeypad && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="w-full mt-4"
+                        >
+                            <div className="grid grid-cols-3 gap-3 p-4 bg-muted/20 rounded-2xl border border-white/5">
+                                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map((key) => (
+                                    <Button
+                                        key={key}
+                                        variant="ghost"
+                                        className="h-12 text-xl font-medium bg-background/50 hover:bg-primary/20 rounded-xl"
+                                        onClick={() => handleDTMF(key)}
+                                    >
+                                        {key}
+                                    </Button>
+                                ))}
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

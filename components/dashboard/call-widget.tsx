@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { useCreateCallLog } from "@/hooks/use-calls";
 import { useUpdateContact } from "@/hooks/use-contacts";
+import { SipService } from "@/lib/services/sip-service";
 
 // Sub-components
 import { DialerPad } from "./dialer/dialer-pad";
@@ -135,7 +136,6 @@ export function CallWidget() {
                 // Trigger the call
                 setCurrentNumber(nextItem.number);
                 startCall();
-                const { SipService } = await import("@/lib/services/sip-service");
                 SipService.getInstance().call(nextItem.number);
             }
         }, 3000); // 3 second delay between calls to let the agent breathe
@@ -165,8 +165,7 @@ export function CallWidget() {
     const { data: searchResults } = useContactsPaginated({ search: debouncedSearch, limit: 5 });
 
     useEffect(() => {
-        const interval = setInterval(async () => {
-            const { SipService } = await import("@/lib/services/sip-service");
+        const interval = setInterval(() => {
             const sip = SipService.getInstance();
             setSipStatus(sip.isRegistered() ? "connected" : sip.isConnected() ? "connecting" : "disconnected");
         }, 2000);
@@ -201,21 +200,20 @@ export function CallWidget() {
     const { trigger: createCallLog } = useCreateCallLog();
     const { trigger: updateContact } = useUpdateContact();
 
-    const handleCall = useCallback(async (numberOverride?: string) => {
+    const handleCall = useCallback((numberOverride?: string) => {
         const target = numberOverride || currentNumber;
         if (target) {
             startCall();
             if (target !== currentNumber) setCurrentNumber(target);
-            const { SipService } = await import("@/lib/services/sip-service");
             SipService.getInstance().call(target, selectedSipAccountId || undefined);
         }
     }, [currentNumber, startCall, setCurrentNumber, selectedSipAccountId]);
 
     const persistCallLog = useCallback(async (status: string) => {
-        if (!currentNumber) return;
+        if (!currentNumber || !profile) return;
 
         // Persist to database
-        if (contact?.id && profile) {
+        if (contact?.id) {
             // Update contact status if appropriate
             updateContact({
                 id: contact.id,
@@ -225,24 +223,24 @@ export function CallWidget() {
                     last_call_status: status
                 }
             });
-
-            // Create call log - map status to CallLog enum
-            let logStatus: "completed" | "missed" | "failed" | "no_answer" | "busy" = "failed";
-            if (status === "answered" || status === "completed") logStatus = "completed";
-            else if (status === "no-answer" || status === "no_answer") logStatus = "no_answer";
-            else if (status === "busy") logStatus = "busy";
-
-            createCallLog({
-                contact_id: contact.id,
-                user_id: profile.id,
-                organization_id: profile.organization_id,
-                phone_number: currentNumber,
-                direction: "outbound",
-                status: logStatus,
-                duration_seconds: callDuration,
-                started_at: callStartedAt || new Date().toISOString(),
-            });
         }
+
+        // Create call log - map status to CallLog enum
+        let logStatus: "completed" | "missed" | "failed" | "no_answer" | "busy" = "failed";
+        if (status === "answered" || status === "completed" || status === "active") logStatus = "completed";
+        else if (status === "no-answer" || status === "no_answer") logStatus = "no_answer";
+        else if (status === "busy") logStatus = "busy";
+
+        createCallLog({
+            contact_id: contact?.id || undefined,
+            user_id: profile.id,
+            organization_id: profile.organization_id,
+            phone_number: currentNumber,
+            direction: "outbound",
+            status: logStatus,
+            duration_seconds: callDuration,
+            started_at: callStartedAt || new Date().toISOString(),
+        });
 
         // Update auto-dialer queue
         if (autoDialerActive) {
@@ -250,9 +248,8 @@ export function CallWidget() {
         }
     }, [currentNumber, contact, profile, callDuration, callStartedAt, autoDialerActive, updateContact, createCallLog, updateQueueStatus]);
 
-    const handleHangup = useCallback(async () => {
+    const handleHangup = useCallback(() => {
         const id = selectedSipAccountId || undefined;
-        const { SipService } = await import("@/lib/services/sip-service");
         SipService.getInstance().hangup(id);
 
         // persistCallLog is now handled by the useEffect that watches for 'ended' status
@@ -407,10 +404,9 @@ export function CallWidget() {
                                         status={callStatus}
                                         duration={durationDisplay}
                                         isMuted={isMuted}
-                                        onMuteToggle={async () => {
+                                        onMuteToggle={() => {
                                             const n = !isMuted;
                                             setIsMuted(n);
-                                            const { SipService } = await import("@/lib/services/sip-service");
                                             SipService.getInstance().mute(n);
                                         }}
                                         isOnHold={isOnHold}
@@ -436,9 +432,8 @@ export function CallWidget() {
                                             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 ml-1">Calling From</p>
                                             <Select
                                                 value={selectedSipAccountId || ""}
-                                                onValueChange={async (val) => {
+                                                onValueChange={(val) => {
                                                     setSelectedSipAccountId(val);
-                                                    const { SipService } = await import("@/lib/services/sip-service");
                                                     SipService.getInstance().activeUAId = val;
                                                 }}
                                             >

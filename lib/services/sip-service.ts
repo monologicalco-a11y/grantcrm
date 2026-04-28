@@ -55,6 +55,16 @@ export class SipService {
 
             if (!window.__SIP_SERVICE__) {
                 window.__SIP_SERVICE__ = new SipService();
+                
+                // Add global hot-swap listener
+                if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+                    navigator.mediaDevices.addEventListener("devicechange", async () => {
+                        console.log("[SIP] 🔄 Audio devices changed! Attempting hot-swap...");
+                        const { useDialerStore } = await import("@/lib/stores");
+                        const { selectedMicrophoneId } = useDialerStore.getState();
+                        await window.__SIP_SERVICE__?.replaceAudioTrack(selectedMicrophoneId || undefined);
+                    });
+                }
             }
             return window.__SIP_SERVICE__;
         }
@@ -112,6 +122,12 @@ export class SipService {
 
             this.uas.set(id, janusUa);
             this.setupJanusHandlers(id, janusUa);
+
+            // Forward quality events
+            janusUa.on("quality", (quality: string) => {
+                window.dispatchEvent(new CustomEvent("sip:call:quality", { detail: { quality } }));
+            });
+
             await janusUa.register();
 
             if (!this._activeUAId) this._activeUAId = id;
@@ -157,6 +173,33 @@ export class SipService {
         }
     }
 
+    public async sendDTMF(tone: string) {
+        const ua = this._activeUAId ? this.uas.get(this._activeUAId) : null;
+        if (ua && 'sendDTMF' in ua && typeof ua.sendDTMF === 'function') {
+            await (ua as any).sendDTMF(tone);
+        } else {
+            console.warn("[SIP] DTMF is not supported or no active call");
+        }
+    }
+
+    public async replaceAudioTrack(deviceId?: string) {
+        const ua = this._activeUAId ? this.uas.get(this._activeUAId) : null;
+        if (!ua || !('replaceAudioTrack' in ua)) return;
+
+        try {
+            const constraints: boolean | MediaTrackConstraints = deviceId
+                ? { deviceId: { exact: deviceId } }
+                : true;
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+            const track = stream.getAudioTracks()[0];
+            if (track) {
+                await (ua as any).replaceAudioTrack(track);
+            }
+        } catch (e) {
+            console.error("[SIP] Failed to get new audio device for hot-swap", e);
+        }
+    }
+
     public call(target: string, accountId?: string) {
         const id = accountId || this._activeUAId;
         const ua = id ? this.uas.get(id) : null;
@@ -175,6 +218,8 @@ export class SipService {
                 remoteAudio = document.createElement("audio") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
                 remoteAudio.id = "sip-remote-audio";
                 remoteAudio.autoplay = true;
+                // @ts-expect-error playsInline
+                remoteAudio.playsInline = true;
                 document.body.appendChild(remoteAudio);
             }
 
@@ -236,8 +281,11 @@ export class SipService {
                 const peerconnection = e.peerconnection as RTCPeerConnection;
                 peerconnection.ontrack = (event: RTCTrackEvent) => {
                     if (event.track.kind === "audio" && remoteAudio) {
-                        this._remoteStream = event.streams[0];
-                        remoteAudio.srcObject = this._remoteStream;
+                        const stream = (event.streams && event.streams[0]) || new MediaStream([event.track]);
+                        this._remoteStream = stream;
+                        if (remoteAudio.srcObject !== this._remoteStream) {
+                            remoteAudio.srcObject = this._remoteStream;
+                        }
                         const { selectedSpeakerId } = useDialerStore.getState();
                         if (selectedSpeakerId && typeof remoteAudio.setSinkId === "function") {
                             remoteAudio.setSinkId(selectedSpeakerId).catch(console.error);
@@ -314,7 +362,7 @@ export class SipService {
                 if ('hangup' in session) {
                     (session as any).hangup();
                 } else {
-                    (session as unknown as import('jssip/src/RTCSession').RTCSession).terminate();
+                    (session as any).terminate();
                 }
             } catch {
                 this._isHangingUp = false;
@@ -328,11 +376,7 @@ export class SipService {
         useDialerStore.getState().endCall();
     }
 
-    public sendDTMF(tone: string, accountId?: string) {
-        const id = accountId || this._activeUAId;
-        const session = id ? this.sessions.get(id) : null;
-        if (session) session.sendDTMF(tone);
-    }
+
 
     public mute(isMuted: boolean, accountId?: string) {
         const id = accountId || this._activeUAId;
@@ -473,27 +517,50 @@ export class SipService {
             useDialerStore.getState().setCallStatus("active");
         });
 
+        ua.on('ringing', () => {
+            console.log(`[SIP] Janus call ringing`);
+            useDialerStore.getState().setCallStatus("ringing");
+        });
+
+        ua.on('progress', () => {
+            console.log(`[SIP] Janus call progress (early media)`);
+            useDialerStore.getState().setCallStatus("ringing");
+        });
+
         ua.on('ended', () => {
             console.log(`[SIP] Janus call ended`);
             useDialerStore.getState().endCall();
         });
 
         ua.on('track', (event: any) => {
-            console.log(`[SIP] Janus track received:`, event?.track?.kind, event?.streams?.length, 'streams');
-            if (event.streams && event.streams[0]) {
-                this._remoteStream = event.streams[0];
-                let remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement;
-                if (!remoteAudio) {
-                    console.log("[SIP] Creating audio element for remote stream");
-                    remoteAudio = document.createElement("audio");
-                    remoteAudio.id = "sip-remote-audio";
-                    remoteAudio.autoplay = true;
-                    document.body.appendChild(remoteAudio);
-                }
-                remoteAudio.srcObject = this._remoteStream;
-                remoteAudio.play().catch((e) => console.warn("[SIP] Audio play failed:", e));
-                console.log("[SIP] ✅ Remote audio stream attached and playing");
+            console.log(`[SIP] Janus track received:`, event?.track?.kind);
+            
+            let remoteAudio = document.getElementById("sip-remote-audio") as HTMLAudioElement;
+            if (!remoteAudio) {
+                console.log("[SIP] Creating audio element for remote stream");
+                remoteAudio = document.createElement("audio");
+                remoteAudio.id = "sip-remote-audio";
+                remoteAudio.autoplay = true;
+                // @ts-expect-error playsInline
+                remoteAudio.playsInline = true;
+                document.body.appendChild(remoteAudio);
             }
+            
+            // Bulletproof stream and track handling
+            if (!remoteAudio.srcObject) {
+                remoteAudio.srcObject = new MediaStream();
+            }
+            
+            const mediaStream = remoteAudio.srcObject as MediaStream;
+            if (event.track && !mediaStream.getTracks().includes(event.track)) {
+                mediaStream.addTrack(event.track);
+                console.log(`[SIP] Added ${event.track.kind} track to remote audio stream`);
+            }
+            
+            this._remoteStream = remoteAudio.srcObject;
+            
+            remoteAudio.play().catch((e) => console.warn("[SIP] Audio play failed:", e));
+            console.log("[SIP] ✅ Remote audio stream attached and playing");
         });
     }
 

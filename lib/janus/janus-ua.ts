@@ -16,6 +16,7 @@ export class JanusUA {
     private localStream: MediaStream | null = null;
     private options: JanusUAOptions;
     private handlers: Map<string, Array<(...args: unknown[]) => void>> = new Map();
+    private statsInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(options: JanusUAOptions) {
         this.options = options;
@@ -131,13 +132,24 @@ export class JanusUA {
         this.localStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
         this.localStream.getTracks().forEach(track => this.pc?.addTrack(track, this.localStream!));
 
+        let signalingSent = false;
+        const pendingCandidates: Array<Record<string, unknown> | { completed: boolean }> = [];
+
         this.pc.onicecandidate = (event) => {
+            const candidateData = event.candidate 
+                ? event.candidate as unknown as Record<string, unknown> 
+                : { completed: true };
+
             if (event.candidate) {
                 console.log("[JanusUA] 🧊 ICE candidate gathered:", event.candidate.candidate);
-                this.client.sendTrickleCandidate(event.candidate as unknown as Record<string, unknown>).catch(e => console.warn(e));
             } else {
                 console.log("[JanusUA] 🧊 ICE gathering finished");
-                this.client.sendTrickleCandidate({ completed: true }).catch(e => console.warn(e));
+            }
+
+            if (signalingSent) {
+                this.client.sendTrickleCandidate(candidateData).catch(e => console.warn(e));
+            } else {
+                pendingCandidates.push(candidateData);
             }
         };
 
@@ -153,6 +165,14 @@ export class JanusUA {
             type: "offer",
             sdp: offer.sdp
         });
+        
+        signalingSent = true;
+        if (pendingCandidates.length > 0) {
+            console.log(`[JanusUA] Sending ${pendingCandidates.length} buffered ICE candidates...`);
+            for (const candidate of pendingCandidates) {
+                this.client.sendTrickleCandidate(candidate).catch(e => console.warn(e));
+            }
+        }
     }
 
     public async hangup() {
@@ -161,13 +181,11 @@ export class JanusUA {
     }
 
     private handleAccepted(msg: JanusMessage) {
-        if (msg.jsep && this.pc) {
-            console.log(`[JanusUA] Setting remote SDP answer from accepted event, type: ${msg.jsep.type}`);
-            this.pc.setRemoteDescription(new RTCSessionDescription(msg.jsep))
-                .then(() => console.log("[JanusUA] ✅ Remote description set successfully"))
-                .catch(e => console.error("[JanusUA] ❌ Failed to set remote description:", e));
-        }
+        // Note: We DO NOT setRemoteDescription here anymore.
+        // janus-client.ts explicitly emits a 'jsep' event for ANY message containing a jsep object.
+        // Applying it here and in the 'jsep' handler causes an InvalidStateError (double-set).
         this.emit("accepted", msg);
+        this.startQualityMonitoring();
     }
     public async answer(jsepOffer: RTCSessionDescriptionInit, audioDeviceId?: string) {
         console.log(`[JanusUA] Answering incoming call with offer...`);
@@ -196,13 +214,24 @@ export class JanusUA {
         this.localStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
         this.localStream.getTracks().forEach(track => this.pc?.addTrack(track, this.localStream!));
 
+        let signalingSent = false;
+        const pendingCandidates: Array<Record<string, unknown> | { completed: boolean }> = [];
+
         this.pc.onicecandidate = (event) => {
+            const candidateData = event.candidate 
+                ? event.candidate as unknown as Record<string, unknown> 
+                : { completed: true };
+
             if (event.candidate) {
                 console.log("[JanusUA] 🧊 ICE candidate gathered (incoming):", event.candidate.candidate);
-                this.client.sendTrickleCandidate(event.candidate as unknown as Record<string, unknown>).catch(e => console.warn(e));
             } else {
                 console.log("[JanusUA] 🧊 ICE gathering finished (incoming)");
-                this.client.sendTrickleCandidate({ completed: true }).catch(e => console.warn(e));
+            }
+
+            if (signalingSent) {
+                this.client.sendTrickleCandidate(candidateData).catch(e => console.warn(e));
+            } else {
+                pendingCandidates.push(candidateData);
             }
         };
 
@@ -218,6 +247,14 @@ export class JanusUA {
             type: "answer",
             sdp: answer.sdp
         });
+        
+        signalingSent = true;
+        if (pendingCandidates.length > 0) {
+            console.log(`[JanusUA] Sending ${pendingCandidates.length} buffered ICE candidates (incoming)...`);
+            for (const candidate of pendingCandidates) {
+                this.client.sendTrickleCandidate(candidate).catch(e => console.warn(e));
+            }
+        }
     }
 
     public async decline() {
@@ -234,6 +271,72 @@ export class JanusUA {
     private handleHangup(msg: JanusMessage) {
         this.cleanup();
         this.emit("ended", msg);
+    }
+
+    public async sendDTMF(tone: string) {
+        if (!this.pc) throw new Error("No active peer connection for DTMF");
+        console.log(`[JanusUA] Sending DTMF tone: ${tone}`);
+        await this.client.sendMessage({
+            request: "dtmf",
+            dtmf: tone
+        });
+    }
+
+    public async replaceAudioTrack(newTrack: MediaStreamTrack) {
+        if (!this.pc) throw new Error("No active peer connection to replace track");
+        
+        const senders = this.pc.getSenders();
+        const audioSender = senders.find(s => s.track?.kind === "audio");
+        
+        if (audioSender) {
+            await audioSender.replaceTrack(newTrack);
+            console.log("[JanusUA] 🔄 Successfully hot-swapped audio track");
+        } else {
+            console.warn("[JanusUA] ⚠️ Could not find active audio sender to hot-swap");
+        }
+    }
+
+    private startQualityMonitoring() {
+        if (this.statsInterval) clearInterval(this.statsInterval);
+        
+        let previousTimestamp = 0;
+        let previousPacketsReceived = 0;
+        let previousPacketsLost = 0;
+
+        this.statsInterval = setInterval(async () => {
+            if (!this.pc) return;
+            try {
+                const stats = await this.pc.getStats();
+                let quality = "good";
+
+                stats.forEach(report => {
+                    if (report.type === "inbound-rtp" && report.kind === "audio") {
+                        const packetsReceived = report.packetsReceived || 0;
+                        const packetsLost = report.packetsLost || 0;
+                        const jitter = report.jitter || 0;
+
+                        if (previousTimestamp > 0) {
+                            const deltaReceived = packetsReceived - previousPacketsReceived;
+                            const deltaLost = packetsLost - previousPacketsLost;
+                            
+                            if (deltaReceived > 0) {
+                                const lossRate = deltaLost / (deltaReceived + deltaLost);
+                                if (lossRate > 0.05 || jitter > 0.05) quality = "poor";
+                                else if (lossRate > 0.02 || jitter > 0.03) quality = "fair";
+                            }
+                        }
+
+                        previousTimestamp = report.timestamp;
+                        previousPacketsReceived = packetsReceived;
+                        previousPacketsLost = packetsLost;
+                    }
+                });
+
+                this.emit("quality", quality);
+            } catch (err) {
+                console.warn("[JanusUA] Error getting WebRTC stats", err);
+            }
+        }, 2000);
     }
 
     public async injectAudioFile(file: File) {
@@ -283,6 +386,10 @@ export class JanusUA {
     }
 
     private cleanup() {
+        if (this.statsInterval) {
+            clearInterval(this.statsInterval);
+            this.statsInterval = null;
+        }
         this.pc?.close();
         this.pc = null;
         this.localStream?.getTracks().forEach(t => t.stop());
